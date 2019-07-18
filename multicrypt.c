@@ -5,6 +5,8 @@
 #include <math.h>
 #include <string.h>
 
+#define TEST_STRING "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
 int power(int x, unsigned int y, int p);
 
 int main(int argc, char **argv) {
@@ -14,7 +16,10 @@ int main(int argc, char **argv) {
     };
     union charint buff;
     int encryptFlag = 1;
+    int encryptKey = 7;
     int decryptKey = 103;
+    int modulus = 143;
+    int TEST_STRING_LENGTH = strlen(TEST_STRING);
     if(argc != 2 && argc != 4) {
         printf("Error: Please provide a single filename to be encrypted.\n");
         exit(1);
@@ -28,8 +33,11 @@ int main(int argc, char **argv) {
         }
         decryptKey = atoi(argv[2]);
         argv[1] = argv[3];
+        modulus = 143; // should be inputted?
     } else {
         //generate keys
+        encryptKey = 7;
+        modulus = 143;
     }
     FILE *fpIn;
     FILE *fpOut;
@@ -37,7 +45,7 @@ int main(int argc, char **argv) {
         printf("Error: Could not open this file.\n");
         exit(1);
     }
-    if((fpOut = fopen("multicrypt_TEMP", "w")) == NULL) {
+    if((fpOut = fopen("multicrypt_TEMP", "w+")) == NULL) {
         printf("Error: Could not open this file.\n");
         exit(1);
     }
@@ -52,11 +60,34 @@ int main(int argc, char **argv) {
         exit(1);
     }
     buff.m = 0;
+    if(encryptFlag) {
+        for(int i = 0; i < TEST_STRING_LENGTH; i++) {
+            buff.c = TEST_STRING[i];
+            buff.m = power(buff.m, encryptKey, modulus);
+            fputc(buff.c, fpOut);
+        }
+    } else {
+        char *decryptCheckBuff = malloc((TEST_STRING_LENGTH + 1) * sizeof(char));
+        decryptCheckBuff[TEST_STRING_LENGTH] = '\0';
+        for(int i = 0; i < TEST_STRING_LENGTH; i++) {
+            fscanf(fpIn, "%c", &(buff.c));
+            buff.m = power(buff.m, decryptKey, modulus);
+            decryptCheckBuff[i] = buff.c;
+        }
+        if(strcmp(decryptCheckBuff, TEST_STRING)) {
+            printf("Decryption failed.\n");
+            fclose(fpIn);
+            fclose(fpOut);
+            remove("multicrypt_TEMP");
+            exit(1);
+        }
+    }
+    buff.m = 0;
     while(fscanf(fpIn, "%c", &(buff.c)) != EOF) {
-        if (encryptFlag) {
-            buff.m = power(buff.m, 7, 143);
+        if(encryptFlag) {
+            buff.m = power(buff.m, encryptKey, modulus);
         } else {
-            buff.m = power(buff.m, decryptKey, 143);
+            buff.m = power(buff.m, decryptKey, modulus);
         }
         fputc(buff.c, fpOut);
     }
