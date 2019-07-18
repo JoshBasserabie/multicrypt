@@ -4,10 +4,14 @@
 #include <fcntl.h>
 #include <math.h>
 #include <string.h>
+#include <time.h>
 
 #define TEST_STRING "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+#define SECURITY_FACTOR 255
+#define KEY_COORDINATE -1
 
 int power(int x, unsigned int y, int p);
+int evaluatePolynomial(int *polynomialCoefficients, int polynomialDegree, int coordinate, int modulus);
 
 int main(int argc, char **argv) {
     union charint {
@@ -96,6 +100,26 @@ int main(int argc, char **argv) {
     fclose(fpOut);
     if (encryptFlag) {
         printf("Successfully encrypted file. Your decrypt key is %d\n", decryptKey);
+        printf("How many people would you like to give keys to?\n");
+        int keyNum;
+        scanf("%d", &keyNum);
+        printf("How many of these keys should be required to open the file?\n");
+        int minKeys;
+        scanf("%d", &minKeys);
+        printf("Generating %d keys with %d required to decrypt file...\n", keyNum, minKeys);
+        int *polynomialCoefficients = malloc(minKeys * sizeof(int));
+        srand(time(0));
+        int alternatingSum = 0;
+        for(int i = 1; i < minKeys; i++) {
+            polynomialCoefficients[i] = rand() % SECURITY_FACTOR;
+            alternatingSum += pow(-1, i) * polynomialCoefficients[i];
+        }
+        alternatingSum %= SECURITY_FACTOR;
+        while(alternatingSum < 0) {
+            alternatingSum += SECURITY_FACTOR;
+        }
+        polynomialCoefficients[0] = (decryptKey - alternatingSum) % SECURITY_FACTOR;
+        printf("Checking value at %d is %d: %d\n", KEY_COORDINATE, decryptKey, evaluatePolynomial(polynomialCoefficients, minKeys, KEY_COORDINATE, SECURITY_FACTOR));
     } else {
         printf("Successfully decrypted file.\n");
     }
@@ -121,7 +145,11 @@ int power(int x, unsigned int y, int p)
         x = (x * x) % p;   
     } 
     return res; 
-} 
+}
+
+int evaluatePolynomial(int *polynomialCoefficients, int polynomialDegree, int coordinate, int modulus) {
+    return 103;
+}
 
 // p = 100003, q = 100417
 // n = 10042001251
