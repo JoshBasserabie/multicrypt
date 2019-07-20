@@ -175,9 +175,6 @@ int power(int x, unsigned int y, int p)
         y >>= 1; // y = y/2 
         x = (x * x) % p;   
     }
-    if(res < 0) {
-        res += p;
-    }
     return res; 
 }
 
