@@ -7,36 +7,61 @@
 #include <time.h>
 
 #define TEST_STRING "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-#define SECURITY_FACTOR 255
+#define SECURITY_FACTOR 257
 #define KEY_COORDINATE -1
+#define GENERATOR 3
 
 int power(int x, unsigned int y, int p);
 int evaluatePolynomial(int *polynomialCoefficients, int polynomialDegree, int coordinate, int modulus);
+int neville_algo(int *x, int *y, int n, int t);
+int field_division(int a, int b);
+int log_table[SECURITY_FACTOR];
+int antilog_table[SECURITY_FACTOR];
+
+union charint {
+    char c;
+    int m;
+};
 
 int main(int argc, char **argv) {
-    union charint {
-        char c;
-        int m;
-    };
     union charint buff;
     int encryptFlag = 1;
     int encryptKey = 7;
     int decryptKey = 103;
     int modulus = 143;
     int TEST_STRING_LENGTH = strlen(TEST_STRING);
-    if(argc != 2 && argc != 4) {
-        printf("Error: Please provide a single filename to be encrypted.\n");
+    if(argc != 2 && argc != 3) {
+        printf("Usage: multicrypt [-d] <filename>\n");
+        printf("-d    decrypt\n");
         exit(1);
     }
-    if(argc == 4) {
-        if(strstr(argv[1], "d") != NULL) {
-            encryptFlag = 0;
-        } else {
-            printf("Error: Please provide a single filename to be encrypted.\n");
+    //https://crypto.stackexchange.com/questions/12956/multiplicative-inverse-in-operatornamegf28/12962#12962
+    for(int x, i = 0; i < SECURITY_FACTOR; i++) {
+        x = power(GENERATOR, i, SECURITY_FACTOR);
+        log_table[x] = i;
+        antilog_table[i] = x;
+    }
+    if(argc == 3) {
+        if(strcmp(argv[1], "-d")) {
+            printf("Usage: multicrypt [-d] <filename>\n");
+            printf("-d    decrypt\n");
             exit(1);
         }
-        decryptKey = atoi(argv[2]);
-        argv[1] = argv[3];
+        int keyNum;
+        encryptFlag = 0;
+        printf("How many decrypt keys will you be entering?\n");
+        scanf("%d", &keyNum);
+        int *indices = malloc(keyNum * sizeof(int));
+        int *keys = malloc(keyNum * sizeof(int));
+        int j;
+        for(int i = 0; i < keyNum; i++) {
+            printf("Enter key: ");
+            scanf("%d:%d", &(indices[i]), &(keys[i]));
+        }
+        //neville_algo(double *x, double *y, int n, double t);
+        decryptKey = neville_algo(indices, keys, keyNum, KEY_COORDINATE);
+        printf("Decrypt key is %d\n", decryptKey);
+        argv[1] = argv[2];
         modulus = 143; // should be inputted?
     } else {
         //generate keys
@@ -106,7 +131,7 @@ int main(int argc, char **argv) {
         printf("How many of these keys should be required to open the file?\n");
         int minKeys;
         scanf("%d", &minKeys);
-        printf("Generating %d keys with %d required to decrypt file...\n", keyNum, minKeys);
+        printf("Here are your keys:\n");
         int *polynomialCoefficients = malloc(minKeys * sizeof(int));
         srand(time(0));
         int alternatingSum = 0;
@@ -115,17 +140,23 @@ int main(int argc, char **argv) {
             alternatingSum += pow(-1, i) * polynomialCoefficients[i];
         }
         alternatingSum %= SECURITY_FACTOR;
-        while(alternatingSum < 0) {
+        if(alternatingSum < 0) {
             alternatingSum += SECURITY_FACTOR;
         }
         polynomialCoefficients[0] = (decryptKey - alternatingSum) % SECURITY_FACTOR;
-        printf("Checking value at %d is %d: %d\n", KEY_COORDINATE, decryptKey, evaluatePolynomial(polynomialCoefficients, minKeys, KEY_COORDINATE, SECURITY_FACTOR));
+        if(polynomialCoefficients[0] < 0) {
+            polynomialCoefficients[0] += SECURITY_FACTOR;
+        }
+        for(int i = 0; i < keyNum; i++) {
+            printf("%d:%d\n", i, evaluatePolynomial(polynomialCoefficients, minKeys - 1, i, SECURITY_FACTOR));
+        }
     } else {
         printf("Successfully decrypted file.\n");
     }
     // Look up openPGP, AES, RSA (search for C RSA libraries), ECC, Shamir's secret sharing (consider speed)
 }
 
+//https://www.geeksforgeeks.org/modular-exponentiation-power-in-modular-arithmetic/
 int power(int x, unsigned int y, int p) 
 { 
     int res = 1;      // Initialize result 
@@ -143,16 +174,55 @@ int power(int x, unsigned int y, int p)
         // y must be even now 
         y >>= 1; // y = y/2 
         x = (x * x) % p;   
-    } 
+    }
+    while(res < 0) {
+        res += p;
+    }
     return res; 
 }
 
 int evaluatePolynomial(int *polynomialCoefficients, int polynomialDegree, int coordinate, int modulus) {
-    return 103;
+    int sum = 0;
+    for(int i = 0; i <= polynomialDegree; i++) {
+        sum += (polynomialCoefficients[i] * power(coordinate, i, modulus));
+        sum %= modulus;
+    }
+    return sum;
 }
 
-// p = 100003, q = 100417
-// n = 10042001251
-// totient = 10041800832
-// e = 13
-// d = 5407123525
+//http://practicalcryptography.com/miscellaneous/machine-learning/fitting-polynomial-set-points/
+/************************************************
+#### IMPORTANT -- contents of y are destroyed
+Inputs: x   -   x values, array[0..N-1].
+        y   -   y values, array[0..N-1].
+        n   -   number of x or y values
+        t   -   interpolation point
+Return: the interpolated value of y at x=t
+************************************************/
+int neville_algo(int *x, int *y, int n, int t) {
+    for(int m = 1; m < n; m++){
+        for(int i = 0; i < n-m; i++){
+            int numerator = ((t-x[i+m])*y[i] + (x[i]-t)*y[i+1]) % SECURITY_FACTOR;
+            if(numerator < 0) {
+                numerator += SECURITY_FACTOR;
+            }
+            int denominator = (x[i]-x[i+m]) % SECURITY_FACTOR;
+            if(denominator < 0) {
+                denominator += SECURITY_FACTOR;
+            }            y[i] = field_division(numerator, denominator);
+        }
+    }
+    return y[0];
+}
+
+//https://crypto.stackexchange.com/questions/12956/multiplicative-inverse-in-operatornamegf28/12962#12962
+int field_division(int a, int b) {
+    if (a == 0 || b == 0) return 0;
+    int x = log_table[a];
+    int y = log_table[b];
+    int log_div = (x - y);
+    if(log_div < 0) {
+        log_div += SECURITY_FACTOR - 1;
+    }
+    return antilog_table[log_div];
+}
