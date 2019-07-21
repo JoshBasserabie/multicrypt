@@ -5,16 +5,19 @@
 #include <math.h>
 #include <string.h>
 #include <time.h>
+#include <limits.h>
 
 #define TEST_STRING "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-#define SECURITY_FACTOR 257
+#define SECURITY_FACTOR 1009
 #define KEY_COORDINATE -1
-#define GENERATOR 3
 
-int power(int x, unsigned int y, int p);
+int find_generator(int modulus);
+int power(unsigned int x, unsigned int y, int p);
 int evaluatePolynomial(int *polynomialCoefficients, int polynomialDegree, int coordinate, int modulus);
 int neville_algo(int *x, int *y, int n, int t);
 int field_division(int a, int b);
+int generator_helper(int modulus, int currCandidate);
+
 int log_table[SECURITY_FACTOR];
 int antilog_table[SECURITY_FACTOR];
 
@@ -35,9 +38,10 @@ int main(int argc, char **argv) {
         printf("-d    decrypt\n");
         exit(1);
     }
+    int generator = find_generator(SECURITY_FACTOR);
     //https://crypto.stackexchange.com/questions/12956/multiplicative-inverse-in-operatornamegf28/12962#12962
     for(int x, i = 0; i < SECURITY_FACTOR; i++) {
-        x = power(GENERATOR, i, SECURITY_FACTOR);
+        x = power(generator, i, SECURITY_FACTOR);
         log_table[x] = i;
         antilog_table[i] = x;
     }
@@ -58,9 +62,7 @@ int main(int argc, char **argv) {
             printf("Enter key: ");
             scanf("%d:%d", &(indices[i]), &(keys[i]));
         }
-        //neville_algo(double *x, double *y, int n, double t);
         decryptKey = neville_algo(indices, keys, keyNum, KEY_COORDINATE);
-        printf("Decrypt key is %d\n", decryptKey);
         argv[1] = argv[2];
         modulus = 143; // should be inputted?
     } else {
@@ -156,8 +158,23 @@ int main(int argc, char **argv) {
     // Look up openPGP, AES, RSA (search for C RSA libraries), ECC, Shamir's secret sharing (consider speed)
 }
 
+int find_generator(int modulus) {
+    return generator_helper(modulus, 2);
+}
+
+int generator_helper(int modulus, int currCandidate) {
+    int x = 0;
+    for(int i = 2; i < modulus - 1; i++) {
+        x = power(currCandidate, i, modulus);
+        if(x == 1) {
+            return generator_helper(modulus, currCandidate + 1);
+        }
+    }
+    return currCandidate;
+}
+
 //https://www.geeksforgeeks.org/modular-exponentiation-power-in-modular-arithmetic/
-int power(int x, unsigned int y, int p) 
+int power(unsigned int x, unsigned int y, int p) 
 { 
     int res = 1;      // Initialize result 
   
@@ -174,6 +191,9 @@ int power(int x, unsigned int y, int p)
         // y must be even now 
         y >>= 1; // y = y/2 
         x = (x * x) % p;   
+    }
+    if(res < 0) {
+        printf("x = %d return = %d\n", x, res);
     }
     return res; 
 }
@@ -206,7 +226,8 @@ int neville_algo(int *x, int *y, int n, int t) {
             int denominator = (x[i]-x[i+m]) % SECURITY_FACTOR;
             if(denominator < 0) {
                 denominator += SECURITY_FACTOR;
-            }            y[i] = field_division(numerator, denominator);
+            }
+            y[i] = field_division(numerator, denominator);
         }
     }
     return y[0];
