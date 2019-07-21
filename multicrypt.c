@@ -12,7 +12,7 @@
 #define KEY_COORDINATE -1
 
 int find_generator(int modulus);
-int power(unsigned int x, unsigned int y, int p);
+int power(unsigned int x, unsigned int y, unsigned int p);
 int evaluatePolynomial(int *polynomialCoefficients, int polynomialDegree, int coordinate, int modulus);
 int neville_algo(int *x, int *y, int n, int t);
 int field_division(int a, int b);
@@ -174,9 +174,9 @@ int generator_helper(int modulus, int currCandidate) {
 }
 
 //https://www.geeksforgeeks.org/modular-exponentiation-power-in-modular-arithmetic/
-int power(unsigned int x, unsigned int y, int p) 
+int power(unsigned int x, unsigned int y, unsigned int p) 
 { 
-    int res = 1;      // Initialize result 
+    unsigned int res = 1;      // Initialize result 
   
     x = x % p;  // Update x if it is more than or  
                 // equal to p 
@@ -191,9 +191,6 @@ int power(unsigned int x, unsigned int y, int p)
         // y must be even now 
         y >>= 1; // y = y/2 
         x = (x * x) % p;   
-    }
-    if(res < 0) {
-        printf("x = %d return = %d\n", x, res);
     }
     return res; 
 }
