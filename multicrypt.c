@@ -6,6 +6,7 @@
 #include <string.h>
 #include <time.h>
 #include <limits.h>
+#include <dirent.h>
 
 #define TEST_STRING "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 #define SECURITY_FACTOR 65537
@@ -26,12 +27,18 @@ union charint {
     int m;
 };
 
+struct file_name {
+    char name[NAME_MAX];
+    struct file_name *next;
+};
+
 int main(int argc, char **argv) {
     union charint buff;
     int encryptFlag = 1;
     int encryptKey = 7;
     int decryptKey = 103;
     int modulus = 143;
+    char *filename;
     int TEST_STRING_LENGTH = strlen(TEST_STRING);
     if(argc != 2 && argc != 3) {
         printf("Usage: multicrypt [-d] <filename>\n");
@@ -45,9 +52,6 @@ int main(int argc, char **argv) {
         log_table[x] = i;
         antilog_table[i] = x;
     }
-    // for(int i = 0; i < SECURITY_FACTOR; i++) {
-    //     printf("Log of %d is %d.\n", i, log_table[i]);
-    // }
     if(argc == 3) {
         if(strcmp(argv[1], "-d")) {
             printf("Usage: multicrypt [-d] <filename>\n");
@@ -66,93 +70,205 @@ int main(int argc, char **argv) {
             scanf("%d:%d", &(indices[i]), &(keys[i]));
         }
         decryptKey = neville_algo(indices, keys, keyNum, KEY_COORDINATE);
-        argv[1] = argv[2];
+        filename = argv[2];
         modulus = 143; // should be inputted?
     } else {
         //generate keys
         encryptKey = 7;
         modulus = 143;
-    }
-    FILE *fpIn;
-    FILE *fpOut;
-    if((fpIn = fopen(argv[1], "r")) == NULL) {
-        printf("Error: Could not open this file.\n");
-        exit(1);
-    }
-    if((fpOut = fopen("multicrypt_TEMP", "w+")) == NULL) {
-        printf("Error: Could not open this file.\n");
-        exit(1);
+        filename = argv[1];
     }
     struct stat *filestats = malloc(sizeof(struct stat));
-    if(filestats == NULL) {
-        printf("Error: Could not allocate memory for struct stat.\n");
-        exit(1);
-    }
-    stat(argv[1], filestats);
-    if(!S_ISREG(filestats->st_mode)) {
+    stat(filename, filestats);
+    if(!(S_ISREG(filestats->st_mode) || S_ISDIR(filestats->st_mode))) {
         printf("Can only support regular files currently.\n");
         exit(1);
     }
-    buff.m = 0;
-    if(encryptFlag) {
-        for(int i = 0; i < TEST_STRING_LENGTH; i++) {
-            buff.c = TEST_STRING[i];
-            buff.m = power(buff.m, encryptKey, modulus);
-            fputc(buff.c, fpOut);
+    FILE *fpIn;
+    FILE *fpOut;
+    if(S_ISDIR(filestats->st_mode)) {
+        char *currFile = malloc(NAME_MAX * sizeof(char));
+        DIR *d;
+        struct dirent *dir;
+        d = opendir(filename);
+
+        while((dir = readdir(d)) != NULL) {
+            if(dir->d_name[0] != '.') {
+                strcpy(currFile, filename);
+                strcat(currFile, "/");
+                strcat(currFile, dir->d_name);
+/*
+COPY PASTED CODE STARTS HERE
+*/
+                if((fpIn = fopen(currFile, "r")) == NULL) {
+                    printf("Error: Could not open this file.\n");
+                    exit(1);
+                }
+                if((fpOut = fopen("multicrypt_TEMP", "w+")) == NULL) {
+                    printf("Error: Could not open this file.\n");
+                    exit(1);
+                }
+                buff.m = 0;
+                if(encryptFlag) {
+                    for(int i = 0; i < TEST_STRING_LENGTH; i++) {
+                        buff.c = TEST_STRING[i];
+                        buff.m = power(buff.m, encryptKey, modulus);
+                        fputc(buff.c, fpOut);
+                    }
+                } else {
+                    char *decryptCheckBuff = malloc((TEST_STRING_LENGTH + 1) * sizeof(char));
+                    decryptCheckBuff[TEST_STRING_LENGTH] = '\0';
+                    for(int i = 0; i < TEST_STRING_LENGTH; i++) {
+                        fscanf(fpIn, "%c", &(buff.c));
+                        buff.m = power(buff.m, decryptKey, modulus);
+                        decryptCheckBuff[i] = buff.c;
+                    }
+                    if(strcmp(decryptCheckBuff, TEST_STRING)) {
+                        printf("Decryption failed.\n");
+                        fclose(fpIn);
+                        fclose(fpOut);
+                        remove("multicrypt_TEMP");
+                        exit(1);
+                    }
+                }
+                buff.m = 0;
+                while(fscanf(fpIn, "%c", &(buff.c)) != EOF) {
+                    if(encryptFlag) {
+                        buff.m = power(buff.m, encryptKey, modulus);
+                    } else {
+                        buff.m = power(buff.m, decryptKey, modulus);
+                    }
+                    fputc(buff.c, fpOut);
+                }
+                rename("multicrypt_TEMP", currFile);
+                fclose(fpIn);
+                fclose(fpOut);
+            }
         }
     } else {
-        char *decryptCheckBuff = malloc((TEST_STRING_LENGTH + 1) * sizeof(char));
-        decryptCheckBuff[TEST_STRING_LENGTH] = '\0';
-        for(int i = 0; i < TEST_STRING_LENGTH; i++) {
-            fscanf(fpIn, "%c", &(buff.c));
-            buff.m = power(buff.m, decryptKey, modulus);
-            decryptCheckBuff[i] = buff.c;
-        }
-        if(strcmp(decryptCheckBuff, TEST_STRING)) {
-            printf("Decryption failed.\n");
-            fclose(fpIn);
-            fclose(fpOut);
-            remove("multicrypt_TEMP");
+        if((fpIn = fopen(filename, "r")) == NULL) {
+            printf("Error: Could not open this file.\n");
             exit(1);
         }
-    }
-    buff.m = 0;
-    while(fscanf(fpIn, "%c", &(buff.c)) != EOF) {
+        if((fpOut = fopen("multicrypt_TEMP", "w+")) == NULL) {
+            printf("Error: Could not open this file.\n");
+            exit(1);
+        }
+        buff.m = 0;
         if(encryptFlag) {
-            buff.m = power(buff.m, encryptKey, modulus);
+            for(int i = 0; i < TEST_STRING_LENGTH; i++) {
+                buff.c = TEST_STRING[i];
+                buff.m = power(buff.m, encryptKey, modulus);
+                fputc(buff.c, fpOut);
+            }
         } else {
-            buff.m = power(buff.m, decryptKey, modulus);
+            char *decryptCheckBuff = malloc((TEST_STRING_LENGTH + 1) * sizeof(char));
+            decryptCheckBuff[TEST_STRING_LENGTH] = '\0';
+            for(int i = 0; i < TEST_STRING_LENGTH; i++) {
+                fscanf(fpIn, "%c", &(buff.c));
+                buff.m = power(buff.m, decryptKey, modulus);
+                decryptCheckBuff[i] = buff.c;
+            }
+            if(strcmp(decryptCheckBuff, TEST_STRING)) {
+                printf("Decryption failed.\n");
+                fclose(fpIn);
+                fclose(fpOut);
+                remove("multicrypt_TEMP");
+                exit(1);
+            }
         }
-        fputc(buff.c, fpOut);
+        buff.m = 0;
+        while(fscanf(fpIn, "%c", &(buff.c)) != EOF) {
+            if(encryptFlag) {
+                buff.m = power(buff.m, encryptKey, modulus);
+            } else {
+                buff.m = power(buff.m, decryptKey, modulus);
+            }
+            fputc(buff.c, fpOut);
+        }
+        rename("multicrypt_TEMP", filename);
+        fclose(fpIn);
+        fclose(fpOut);
     }
-    rename("multicrypt_TEMP", argv[1]);
-    fclose(fpIn);
-    fclose(fpOut);
+/*
+COPY PASTED CODE ENDS HERE
+*/
+    // if((fpIn = fopen(filename, "r")) == NULL) {
+    //     printf("Error: Could not open this file.\n");
+    //     exit(1);
+    // }
+    // if((fpOut = fopen("multicrypt_TEMP", "w+")) == NULL) {
+    //     printf("Error: Could not open this file.\n");
+    //     exit(1);
+    // }
+    // buff.m = 0;
+    // if(encryptFlag) {
+    //     for(int i = 0; i < TEST_STRING_LENGTH; i++) {
+    //         buff.c = TEST_STRING[i];
+    //         buff.m = power(buff.m, encryptKey, modulus);
+    //         fputc(buff.c, fpOut);
+    //     }
+    // } else {
+    //     char *decryptCheckBuff = malloc((TEST_STRING_LENGTH + 1) * sizeof(char));
+    //     decryptCheckBuff[TEST_STRING_LENGTH] = '\0';
+    //     for(int i = 0; i < TEST_STRING_LENGTH; i++) {
+    //         fscanf(fpIn, "%c", &(buff.c));
+    //         buff.m = power(buff.m, decryptKey, modulus);
+    //         decryptCheckBuff[i] = buff.c;
+    //     }
+    //     if(strcmp(decryptCheckBuff, TEST_STRING)) {
+    //         printf("Decryption failed.\n");
+    //         fclose(fpIn);
+    //         fclose(fpOut);
+    //         remove("multicrypt_TEMP");
+    //         exit(1);
+    //     }
+    // }
+    // buff.m = 0;
+    // while(fscanf(fpIn, "%c", &(buff.c)) != EOF) {
+    //     if(encryptFlag) {
+    //         buff.m = power(buff.m, encryptKey, modulus);
+    //     } else {
+    //         buff.m = power(buff.m, decryptKey, modulus);
+    //     }
+    //     fputc(buff.c, fpOut);
+    // }
+    // rename("multicrypt_TEMP", filename);
+    // fclose(fpIn);
+    // fclose(fpOut);
     if (encryptFlag) {
-        printf("How many people would you like to give keys to?\n");
+        int groupNum;
         int keyNum;
-        scanf("%d", &keyNum);
-        printf("How many of these keys should be required to open the file?\n");
-        int minKeys;
-        scanf("%d", &minKeys);
-        printf("Here are your keys:\n");
-        unsigned int *polynomialCoefficients = malloc(minKeys * sizeof(int));
-        srand(time(0));
-        int alternatingSum = 0;
-        for(int i = 1; i < minKeys; i++) {
-            polynomialCoefficients[i] = rand() % SECURITY_FACTOR;
-            alternatingSum += pow(-1, i) * polynomialCoefficients[i];
+        printf("How many groups would you like to create keys for?\n");
+        scanf("%d", &groupNum);
+        printf("\n");
+        for(int i = 0; i < groupNum; i++) {
+            printf("How many people would you like to give keys to for group %d?\n", i);
+            scanf("%d", &keyNum);
+            printf("How many of these keys should be required to open the file?\n");
+            int minKeys;
+            scanf("%d", &minKeys);
+            printf("Here are your keys for group %d:\n", i);
+            unsigned int *polynomialCoefficients = malloc(minKeys * sizeof(int));
+            srand(time(0));
+            int alternatingSum = 0;
+            for(int i = 1; i < minKeys; i++) {
+                polynomialCoefficients[i] = rand() % SECURITY_FACTOR;
+                alternatingSum += pow(-1, i) * polynomialCoefficients[i];
+            }
+            alternatingSum %= SECURITY_FACTOR;
+            if(alternatingSum < 0) {
+                alternatingSum += SECURITY_FACTOR;
+            }
+            polynomialCoefficients[0] = (decryptKey + SECURITY_FACTOR);
+            polynomialCoefficients[0] -= alternatingSum;
+            polynomialCoefficients[0] %= SECURITY_FACTOR;
+            for(int j = 0; j < keyNum; j++) {
+                printf("%d:%d\n", j, evaluatePolynomial(polynomialCoefficients, minKeys - 1, j, SECURITY_FACTOR));
+            }
+            printf("\n"); 
         }
-        alternatingSum %= SECURITY_FACTOR;
-        if(alternatingSum < 0) {
-            alternatingSum += SECURITY_FACTOR;
-        }
-        polynomialCoefficients[0] = (decryptKey + SECURITY_FACTOR);
-        polynomialCoefficients[0] -= alternatingSum;
-        polynomialCoefficients[0] %= SECURITY_FACTOR;
-        for(int i = 0; i < keyNum; i++) {
-            printf("%d:%d\n", i, evaluatePolynomial(polynomialCoefficients, minKeys - 1, i, SECURITY_FACTOR));
-        }
+        
     } else {
         printf("Successfully decrypted file.\n");
     }
