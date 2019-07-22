@@ -17,7 +17,8 @@ int power(unsigned long long int x, unsigned int y, unsigned int p);
 int evaluatePolynomial(unsigned int *polynomialCoefficients, int polynomialDegree, int coordinate, int modulus);
 int neville_algo(int *x, int *y, int n, int t);
 int field_division(int a, int b);
-int generator_helper(int modulus, int currCandidate);
+static int generator_helper(int modulus, int currCandidate);
+static void handle_file(char *file_to_handle, int encryptFlag, int encryptKey, int decryptKey, int modulus);
 
 int log_table[SECURITY_FACTOR];
 int antilog_table[SECURITY_FACTOR];
@@ -33,6 +34,11 @@ struct file_name {
 };
 
 int main(int argc, char **argv) {
+    if(argc != 2 && argc != 3) {
+        printf("Usage: multicrypt [-d] <filename>\n");
+        printf("-d    decrypt\n");
+        exit(1);
+    }
     union charint buff;
     int encryptFlag = 1;
     int encryptKey = 7;
@@ -40,11 +46,7 @@ int main(int argc, char **argv) {
     int modulus = 143;
     char *filename;
     int TEST_STRING_LENGTH = strlen(TEST_STRING);
-    if(argc != 2 && argc != 3) {
-        printf("Usage: multicrypt [-d] <filename>\n");
-        printf("-d    decrypt\n");
-        exit(1);
-    }
+    int dir_flag = 0;
     int generator = find_generator(SECURITY_FACTOR);
     //https://crypto.stackexchange.com/questions/12956/multiplicative-inverse-in-operatornamegf28/12962#12962
     for(int x, i = 0; i < SECURITY_FACTOR; i++) {
@@ -81,161 +83,28 @@ int main(int argc, char **argv) {
     struct stat *filestats = malloc(sizeof(struct stat));
     stat(filename, filestats);
     if(!(S_ISREG(filestats->st_mode) || S_ISDIR(filestats->st_mode))) {
-        printf("Can only support regular files currently.\n");
+        printf("Can only support regular files or directories currently.\n");
         exit(1);
     }
     FILE *fpIn;
     FILE *fpOut;
+    char *currFile = malloc(NAME_MAX * sizeof(char));
+    DIR *d;
+    struct dirent *dir;
     if(S_ISDIR(filestats->st_mode)) {
-        char *currFile = malloc(NAME_MAX * sizeof(char));
-        DIR *d;
-        struct dirent *dir;
+        dir_flag = 1;
         d = opendir(filename);
-
         while((dir = readdir(d)) != NULL) {
             if(dir->d_name[0] != '.') {
                 strcpy(currFile, filename);
                 strcat(currFile, "/");
                 strcat(currFile, dir->d_name);
-/*
-COPY PASTED CODE STARTS HERE
-*/
-                if((fpIn = fopen(currFile, "r")) == NULL) {
-                    printf("Error: Could not open this file.\n");
-                    exit(1);
-                }
-                if((fpOut = fopen("multicrypt_TEMP", "w+")) == NULL) {
-                    printf("Error: Could not open this file.\n");
-                    exit(1);
-                }
-                buff.m = 0;
-                if(encryptFlag) {
-                    for(int i = 0; i < TEST_STRING_LENGTH; i++) {
-                        buff.c = TEST_STRING[i];
-                        buff.m = power(buff.m, encryptKey, modulus);
-                        fputc(buff.c, fpOut);
-                    }
-                } else {
-                    char *decryptCheckBuff = malloc((TEST_STRING_LENGTH + 1) * sizeof(char));
-                    decryptCheckBuff[TEST_STRING_LENGTH] = '\0';
-                    for(int i = 0; i < TEST_STRING_LENGTH; i++) {
-                        fscanf(fpIn, "%c", &(buff.c));
-                        buff.m = power(buff.m, decryptKey, modulus);
-                        decryptCheckBuff[i] = buff.c;
-                    }
-                    if(strcmp(decryptCheckBuff, TEST_STRING)) {
-                        printf("Decryption failed.\n");
-                        fclose(fpIn);
-                        fclose(fpOut);
-                        remove("multicrypt_TEMP");
-                        exit(1);
-                    }
-                }
-                buff.m = 0;
-                while(fscanf(fpIn, "%c", &(buff.c)) != EOF) {
-                    if(encryptFlag) {
-                        buff.m = power(buff.m, encryptKey, modulus);
-                    } else {
-                        buff.m = power(buff.m, decryptKey, modulus);
-                    }
-                    fputc(buff.c, fpOut);
-                }
-                rename("multicrypt_TEMP", currFile);
-                fclose(fpIn);
-                fclose(fpOut);
+                handle_file(currFile, encryptFlag, encryptKey, decryptKey, modulus);
             }
         }
     } else {
-        if((fpIn = fopen(filename, "r")) == NULL) {
-            printf("Error: Could not open this file.\n");
-            exit(1);
-        }
-        if((fpOut = fopen("multicrypt_TEMP", "w+")) == NULL) {
-            printf("Error: Could not open this file.\n");
-            exit(1);
-        }
-        buff.m = 0;
-        if(encryptFlag) {
-            for(int i = 0; i < TEST_STRING_LENGTH; i++) {
-                buff.c = TEST_STRING[i];
-                buff.m = power(buff.m, encryptKey, modulus);
-                fputc(buff.c, fpOut);
-            }
-        } else {
-            char *decryptCheckBuff = malloc((TEST_STRING_LENGTH + 1) * sizeof(char));
-            decryptCheckBuff[TEST_STRING_LENGTH] = '\0';
-            for(int i = 0; i < TEST_STRING_LENGTH; i++) {
-                fscanf(fpIn, "%c", &(buff.c));
-                buff.m = power(buff.m, decryptKey, modulus);
-                decryptCheckBuff[i] = buff.c;
-            }
-            if(strcmp(decryptCheckBuff, TEST_STRING)) {
-                printf("Decryption failed.\n");
-                fclose(fpIn);
-                fclose(fpOut);
-                remove("multicrypt_TEMP");
-                exit(1);
-            }
-        }
-        buff.m = 0;
-        while(fscanf(fpIn, "%c", &(buff.c)) != EOF) {
-            if(encryptFlag) {
-                buff.m = power(buff.m, encryptKey, modulus);
-            } else {
-                buff.m = power(buff.m, decryptKey, modulus);
-            }
-            fputc(buff.c, fpOut);
-        }
-        rename("multicrypt_TEMP", filename);
-        fclose(fpIn);
-        fclose(fpOut);
+        handle_file(filename, encryptFlag, encryptKey, decryptKey, modulus);
     }
-/*
-COPY PASTED CODE ENDS HERE
-*/
-    // if((fpIn = fopen(filename, "r")) == NULL) {
-    //     printf("Error: Could not open this file.\n");
-    //     exit(1);
-    // }
-    // if((fpOut = fopen("multicrypt_TEMP", "w+")) == NULL) {
-    //     printf("Error: Could not open this file.\n");
-    //     exit(1);
-    // }
-    // buff.m = 0;
-    // if(encryptFlag) {
-    //     for(int i = 0; i < TEST_STRING_LENGTH; i++) {
-    //         buff.c = TEST_STRING[i];
-    //         buff.m = power(buff.m, encryptKey, modulus);
-    //         fputc(buff.c, fpOut);
-    //     }
-    // } else {
-    //     char *decryptCheckBuff = malloc((TEST_STRING_LENGTH + 1) * sizeof(char));
-    //     decryptCheckBuff[TEST_STRING_LENGTH] = '\0';
-    //     for(int i = 0; i < TEST_STRING_LENGTH; i++) {
-    //         fscanf(fpIn, "%c", &(buff.c));
-    //         buff.m = power(buff.m, decryptKey, modulus);
-    //         decryptCheckBuff[i] = buff.c;
-    //     }
-    //     if(strcmp(decryptCheckBuff, TEST_STRING)) {
-    //         printf("Decryption failed.\n");
-    //         fclose(fpIn);
-    //         fclose(fpOut);
-    //         remove("multicrypt_TEMP");
-    //         exit(1);
-    //     }
-    // }
-    // buff.m = 0;
-    // while(fscanf(fpIn, "%c", &(buff.c)) != EOF) {
-    //     if(encryptFlag) {
-    //         buff.m = power(buff.m, encryptKey, modulus);
-    //     } else {
-    //         buff.m = power(buff.m, decryptKey, modulus);
-    //     }
-    //     fputc(buff.c, fpOut);
-    // }
-    // rename("multicrypt_TEMP", filename);
-    // fclose(fpIn);
-    // fclose(fpOut);
     if (encryptFlag) {
         int groupNum;
         int keyNum;
@@ -267,12 +136,68 @@ COPY PASTED CODE ENDS HERE
                 printf("%d:%d\n", j, evaluatePolynomial(polynomialCoefficients, minKeys - 1, j, SECURITY_FACTOR));
             }
             printf("\n"); 
-        }
-        
+        }  
     } else {
-        printf("Successfully decrypted file.\n");
+        if (dir_flag) {
+            printf("Successfully decrypted directory.\n");
+        } else {
+            printf("Successfully decrypted file.\n");
+        }
     }
-    // Look up openPGP, AES, RSA (search for C RSA libraries), ECC, Shamir's secret sharing (consider speed)
+}
+
+static void handle_file(char *file_to_handle, int encryptFlag, int encryptKey, int decryptKey, int modulus) {
+    int TEST_STRING_LENGTH = strlen(TEST_STRING);
+    int key;
+    if(encryptFlag) {
+        key = encryptKey;
+    } else {
+        key = decryptKey;
+    }
+    FILE *fpIn;
+    FILE *fpOut;
+    union charint buffer;
+    char *decryptCheckBuff = malloc((TEST_STRING_LENGTH + 1) * sizeof(char));
+    if((fpIn = fopen(file_to_handle, "r")) == NULL) {
+        printf("Error: Could not open this file.\n");
+        exit(1);
+    }
+    if((fpOut = fopen("multicrypt_TEMP", "w+")) == NULL) {
+        printf("Error: Could not open this file.\n");
+        exit(1);
+    }
+    buffer.m = 0;
+    if(encryptFlag) {
+        for(int i = 0; i < TEST_STRING_LENGTH; i++) {
+            buffer.c = TEST_STRING[i];
+            buffer.m = power(buffer.m, key, modulus);
+            fputc(buffer.c, fpOut);
+        }
+    } else {
+        decryptCheckBuff[TEST_STRING_LENGTH] = '\0';
+        for(int i = 0; i < TEST_STRING_LENGTH; i++) {
+            fscanf(fpIn, "%c", &(buffer.c));
+            buffer.m = power(buffer.m, key, modulus);
+            decryptCheckBuff[i] = buffer.c;
+        }
+        if(strcmp(decryptCheckBuff, TEST_STRING)) {
+            printf("Decryption failed.\n");
+            fclose(fpIn);
+            fclose(fpOut);
+            remove("multicrypt_TEMP");
+            free(decryptCheckBuff);
+            exit(1);
+        }
+    }
+    buffer.m = 0;
+    while(fscanf(fpIn, "%c", &(buffer.c)) != EOF) {
+        buffer.m = power(buffer.m, key, modulus);
+        fputc(buffer.c, fpOut);
+    }
+    rename("multicrypt_TEMP", file_to_handle);
+    fclose(fpIn);
+    fclose(fpOut);
+    free(decryptCheckBuff);
 }
 
 int find_generator(int modulus) {
