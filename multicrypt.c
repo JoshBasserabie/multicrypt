@@ -8,12 +8,12 @@
 #include <limits.h>
 
 #define TEST_STRING "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-#define SECURITY_FACTOR 1009
+#define SECURITY_FACTOR 65537
 #define KEY_COORDINATE -1
 
 int find_generator(int modulus);
-int power(unsigned int x, unsigned int y, unsigned int p);
-int evaluatePolynomial(int *polynomialCoefficients, int polynomialDegree, int coordinate, int modulus);
+int power(unsigned long long int x, unsigned int y, unsigned int p);
+int evaluatePolynomial(unsigned int *polynomialCoefficients, int polynomialDegree, int coordinate, int modulus);
 int neville_algo(int *x, int *y, int n, int t);
 int field_division(int a, int b);
 int generator_helper(int modulus, int currCandidate);
@@ -45,6 +45,9 @@ int main(int argc, char **argv) {
         log_table[x] = i;
         antilog_table[i] = x;
     }
+    // for(int i = 0; i < SECURITY_FACTOR; i++) {
+    //     printf("Log of %d is %d.\n", i, log_table[i]);
+    // }
     if(argc == 3) {
         if(strcmp(argv[1], "-d")) {
             printf("Usage: multicrypt [-d] <filename>\n");
@@ -126,7 +129,6 @@ int main(int argc, char **argv) {
     fclose(fpIn);
     fclose(fpOut);
     if (encryptFlag) {
-        printf("Successfully encrypted file. Your decrypt key is %d\n", decryptKey);
         printf("How many people would you like to give keys to?\n");
         int keyNum;
         scanf("%d", &keyNum);
@@ -134,7 +136,7 @@ int main(int argc, char **argv) {
         int minKeys;
         scanf("%d", &minKeys);
         printf("Here are your keys:\n");
-        int *polynomialCoefficients = malloc(minKeys * sizeof(int));
+        unsigned int *polynomialCoefficients = malloc(minKeys * sizeof(int));
         srand(time(0));
         int alternatingSum = 0;
         for(int i = 1; i < minKeys; i++) {
@@ -145,10 +147,9 @@ int main(int argc, char **argv) {
         if(alternatingSum < 0) {
             alternatingSum += SECURITY_FACTOR;
         }
-        polynomialCoefficients[0] = (decryptKey - alternatingSum) % SECURITY_FACTOR;
-        if(polynomialCoefficients[0] < 0) {
-            polynomialCoefficients[0] += SECURITY_FACTOR;
-        }
+        polynomialCoefficients[0] = (decryptKey + SECURITY_FACTOR);
+        polynomialCoefficients[0] -= alternatingSum;
+        polynomialCoefficients[0] %= SECURITY_FACTOR;
         for(int i = 0; i < keyNum; i++) {
             printf("%d:%d\n", i, evaluatePolynomial(polynomialCoefficients, minKeys - 1, i, SECURITY_FACTOR));
         }
@@ -174,29 +175,29 @@ int generator_helper(int modulus, int currCandidate) {
 }
 
 //https://www.geeksforgeeks.org/modular-exponentiation-power-in-modular-arithmetic/
-int power(unsigned int x, unsigned int y, unsigned int p) 
-{ 
-    unsigned int res = 1;      // Initialize result 
+int power(unsigned long long int x, unsigned int y, unsigned int p) 
+{
+    unsigned long long int res = 1;      // Initialize result 
   
     x = x % p;  // Update x if it is more than or  
                 // equal to p 
   
     while (y > 0) 
     { 
-        // If y is odd, multiply x with result 
+        // If y is odd, multiply x with result
         if (y & 1) {
             res = (res*x) % p; 
         }
   
         // y must be even now 
         y >>= 1; // y = y/2 
-        x = (x * x) % p;   
+        x = (x * x) % p;
     }
     return res; 
 }
 
-int evaluatePolynomial(int *polynomialCoefficients, int polynomialDegree, int coordinate, int modulus) {
-    int sum = 0;
+int evaluatePolynomial(unsigned int *polynomialCoefficients, int polynomialDegree, int coordinate, int modulus) {
+    unsigned long long int sum = 0;
     for(int i = 0; i <= polynomialDegree; i++) {
         sum += (polynomialCoefficients[i] * power(coordinate, i, modulus));
         sum %= modulus;
