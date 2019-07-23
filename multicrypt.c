@@ -29,7 +29,7 @@ union charint {
 };
 
 struct file_name {
-    char name[NAME_MAX];
+    char *name;
     struct file_name *next;
 };
 
@@ -82,29 +82,48 @@ int main(int argc, char **argv) {
     }
     struct stat *filestats = malloc(sizeof(struct stat));
     stat(filename, filestats);
-    if(!(S_ISREG(filestats->st_mode) || S_ISDIR(filestats->st_mode))) {
+    if(S_ISDIR(filestats->st_mode)) {
+        dir_flag = 1;
+    } else if (!S_ISREG(filestats->st_mode)) {
         printf("Can only support regular files or directories currently.\n");
         exit(1);
     }
-    FILE *fpIn;
-    FILE *fpOut;
     char *currFile = malloc(NAME_MAX * sizeof(char));
     DIR *d;
     struct dirent *dir;
-    if(S_ISDIR(filestats->st_mode)) {
-        dir_flag = 1;
-        d = opendir(filename);
-        while((dir = readdir(d)) != NULL) {
-            if(dir->d_name[0] != '.') {
-                strcpy(currFile, filename);
-                strcat(currFile, "/");
-                strcat(currFile, dir->d_name);
-                handle_file(currFile, encryptFlag, encryptKey, decryptKey, modulus);
+    FILE *fpIn;
+    FILE *fpOut;
+    struct file_name *head = malloc(sizeof(struct file_name));
+    head->name = strdup(filename);
+    head->next = NULL;
+    struct file_name *tail = head;
+    struct file_name *temp;
+    while(head) {
+        stat(head->name, filestats);
+        if(S_ISDIR(filestats->st_mode)) {
+            d = opendir(head->name);
+            while((dir = readdir(d)) != NULL) {
+                if(dir->d_name[0] != '.') {
+                    strcpy(currFile, head->name);
+                    strcat(currFile, "/");
+                    strcat(currFile, dir->d_name);
+                    temp = malloc(sizeof(struct file_name));
+                    temp->name = strdup(currFile);
+                    temp->next = NULL;
+                    tail->next = temp;
+                    tail = tail->next;
+                }
             }
+            closedir(d);
+        } else if(S_ISREG(filestats->st_mode)) {
+            handle_file(head->name, encryptFlag, encryptKey, decryptKey, modulus);
         }
-    } else {
-        handle_file(filename, encryptFlag, encryptKey, decryptKey, modulus);
+        temp = head->next;
+        free(head->name);
+        free(head);
+        head = temp;
     }
+    free(currFile);
     if (encryptFlag) {
         int groupNum;
         int keyNum;
