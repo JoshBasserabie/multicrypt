@@ -142,7 +142,11 @@ int main(int argc, char **argv) {
             int alternatingSum = 0;
             for(int i = 1; i < minKeys; i++) {
                 polynomialCoefficients[i] = rand() % SECURITY_FACTOR;
-                alternatingSum += pow(-1, i) * polynomialCoefficients[i];
+                if (i & 1) {
+                    alternatingSum -= polynomialCoefficients[i];
+                } else {
+                    alternatingSum += polynomialCoefficients[i];
+                }
             }
             alternatingSum %= SECURITY_FACTOR;
             if(alternatingSum < 0) {
