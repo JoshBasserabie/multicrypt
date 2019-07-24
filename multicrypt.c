@@ -24,8 +24,8 @@ int log_table[SECURITY_FACTOR];
 int antilog_table[SECURITY_FACTOR];
 
 union charint {
-    char c;
-    int m;
+    unsigned char c;
+    unsigned int m;
 };
 
 struct file_name {
@@ -41,9 +41,9 @@ int main(int argc, char **argv) {
     }
     union charint buff;
     int encryptFlag = 1;
-    int encryptKey = 7;
-    int decryptKey = 103;
-    int modulus = 143;
+    int encryptKey = 17;
+    int decryptKey = 89;
+    int modulus;
     char *filename;
     int TEST_STRING_LENGTH = strlen(TEST_STRING);
     int dir_flag = 0;
@@ -73,11 +73,11 @@ int main(int argc, char **argv) {
         }
         decryptKey = neville_algo(indices, keys, keyNum, KEY_COORDINATE);
         filename = argv[2];
-        modulus = 143; // should be inputted?
+        modulus = 247; // should be inputted?
     } else {
         //generate keys
-        encryptKey = 7;
-        modulus = 143;
+        encryptKey = 17;
+        modulus = 247;
         filename = argv[1];
     }
     struct stat *filestats = malloc(sizeof(struct stat));
